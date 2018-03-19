@@ -1,5 +1,5 @@
 # imgdup2go
-Another visual image duplicate finder
+Another (small) command line visual image duplicate finder
 
 ```
 Usage of ./imgdup2go:
