@@ -16,9 +16,11 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/rivo/duplo"
-	"github.com/sethgrid/multibar"
+	"github.com/vbauerster/mpb"
+	"github.com/vbauerster/mpb/decor"
 )
 
 var (
@@ -135,11 +137,36 @@ func main() {
 	// Create an empty store.
 	store := duplo.New()
 	fmt.Printf("Found %d files\n", len(files))
-	progressBars, _ := multibar.New()
-	barProgress := progressBars.MakeBar(len(files), "Processed Images")
-	go progressBars.Listen()
 
-	for i, f := range files {
+	p := mpb.New(
+		// override default (80) width
+		mpb.WithWidth(100),
+		// override default "[=>-]" format
+		mpb.WithFormat("╢▌▌░╟"),
+		// override default 120ms refresh rate
+		mpb.WithRefreshRate(100*time.Millisecond),
+	)
+
+	name := "Processed Images:"
+	// Add a bar
+	// You're not limited to just a single bar, add as many as you need
+	bar := p.AddBar(int64(len(files)),
+		// Prepending decorators
+		mpb.PrependDecorators(
+			// StaticName decorator with minWidth and no extra config
+			// If you need to change name while rendering, use DynamicName
+			decor.StaticName(name, len(name), 0),
+			// ETA decorator with minWidth and no extra config
+			decor.ETA(4, 0),
+		),
+		// Appending decorators
+		mpb.AppendDecorators(
+			// Percentage decorator with minWidth and no extra config
+			decor.Percentage(5, 0),
+		),
+	)
+
+	for _, f := range files {
 		fn := filepath.Join(*path, f.Name())
 		file, err := os.Open(fn)
 		if err != nil {
@@ -174,7 +201,7 @@ func main() {
 				match := matches[0]
 				fi := match.ID.(os.FileInfo)
 				if int(match.Score) <= *sensitivity {
-					progressBars.Printf("%s matches: %s\n", fn, fi.Name())
+					fmt.Printf("%s matches: %s\n", fn, fi.Name())
 
 					if !*dryRun {
 						_, err := os.Stat(dst)
@@ -215,7 +242,9 @@ func main() {
 			if err := file.Close(); err != nil {
 				fmt.Println("could not close file: ", fn)
 			}
-			barProgress(i)
+
+			bar.Increment()
 		}
 	}
+	p.Wait()
 }
