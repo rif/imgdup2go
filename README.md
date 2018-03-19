@@ -37,7 +37,10 @@ From source:
 ```
 go get -u -v https://github.com/rif/imgdup2go
 ```
-
 ## Credits
 The heavy lifting is done by the [duplo](https://github.com/rivo/duplo) library.
+
 A python version can be found [here](https://github.com/rif/imgdup)
+
+## WARNING
+This tool moves and deletes files. Please make a backup of your image collection before using it!
