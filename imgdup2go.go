@@ -24,7 +24,7 @@ import (
 )
 
 var (
-	extensions   = map[string]func(io.Reader) (image.Image, error){"jpeg": jpeg.Decode, "png": png.Decode, "gif": gif.Decode}
+	extensions   = map[string]func(io.Reader) (image.Image, error){"jpg": jpeg.Decode, "jpeg": jpeg.Decode, "png": png.Decode, "gif": gif.Decode}
 	dst          = "duplicates"
 	keepPrefix   = "_KEPT_"
 	deletePrefix = "_GONE_"
@@ -167,16 +167,26 @@ func main() {
 	)
 
 	for _, f := range files {
+		ext := filepath.Ext(f.Name())
+		if len(ext) > 1 {
+			ext = ext[1:]
+		}
+		if _, ok := extensions[ext]; !ok {
+			bar.Increment()
+			continue
+		}
 		fn := filepath.Join(*path, f.Name())
 		file, err := os.Open(fn)
 		if err != nil {
 			fmt.Printf("%s: %v\n", fn, err)
+			bar.Increment()
 			continue
 		}
 		_, format, err := image.DecodeConfig(file)
 		if err != nil {
 			fmt.Printf("%s: %v\n", fn, err)
 			file.Close()
+			bar.Increment()
 			continue
 		}
 		file.Close()
@@ -185,12 +195,14 @@ func main() {
 			file, err := os.Open(fn)
 			if err != nil {
 				fmt.Printf("%s: %v\n", fn, err)
+				bar.Increment()
 				continue
 			}
 
 			img, err := decodeFunc(file)
 			if err != nil {
 				fmt.Printf("ignoring %s: %v\n", fn, err)
+				bar.Increment()
 				continue
 			}
 			// Add image "img" to the store.
@@ -242,7 +254,6 @@ func main() {
 			if err := file.Close(); err != nil {
 				fmt.Println("could not close file: ", fn)
 			}
-
 			bar.Increment()
 		}
 	}
