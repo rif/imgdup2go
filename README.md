@@ -28,3 +28,16 @@ After inspecting the pairs if you agree with what the tool found as duplicates y
 To undo everything you can use the -undo flag.
 
 To find more loosely similat images you can increase the sensitivity, to make it even stricter you can go negative. Enjoy!
+
+## Install
+
+You can find binaries [here](https://github.com/rif/imgdup2go/releases).
+
+From source:
+```
+go get -u -v https://github.com/rif/imgdup2go
+```
+
+## Credits
+The heavy lifting is done by the [duplo](https://github.com/rivo/duplo) library.
+A python version can be found [here](https://github.com/rif/imgdup)
