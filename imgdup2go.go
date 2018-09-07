@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/md5"
 	"encoding/hex"
 	"flag"
@@ -96,6 +97,10 @@ func copyFileContents(src, dst string) (err error) {
 
 func main() {
 	flag.Parse()
+
+	var buf bytes.Buffer
+	logger := log.New(&buf, "logger: ", log.Lshortfile)
+
 	dst = filepath.Join(*path, dst)
 	*sensitivity -= 100
 	if *undo {
@@ -106,24 +111,24 @@ func main() {
 		for _, f := range files {
 			if strings.Contains(f.Name(), keepPrefix) {
 				if *dryRun {
-					fmt.Println("removing ", f.Name())
+					logger.Println("removing ", f.Name())
 				} else {
 					os.Remove(filepath.Join(dst, f.Name()))
 				}
 			}
 			if strings.Contains(f.Name(), deletePrefix) {
 				if *dryRun {
-					fmt.Printf("moving %s to %s\n ", filepath.Join(dst, f.Name()), filepath.Join(*path, f.Name()[13:]))
+					logger.Printf("moving %s to %s\n ", filepath.Join(dst, f.Name()), filepath.Join(*path, f.Name()[13:]))
 				} else {
 					os.Rename(filepath.Join(dst, f.Name()), filepath.Join(*path, f.Name()[13:]))
 				}
 			}
 		}
 		if *dryRun {
-			fmt.Print("removing directory: ", dst)
+			logger.Print("removing directory: ", dst)
 		} else {
 			if err := os.Remove(dst); err != nil {
-				fmt.Print("could not remove duplicates folder: ", err)
+				logger.Print("could not remove duplicates folder: ", err)
 			}
 		}
 		os.Exit(0)
@@ -136,15 +141,15 @@ func main() {
 
 	// Create an empty store.
 	store := duplo.New()
-	fmt.Printf("Found %d files\n", len(files))
+	logger.Printf("Found %d files\n", len(files))
 
 	p := mpb.New(
 		// override default (80) width
-		mpb.WithWidth(100),
+		mpb.WithWidth(64),
 		// override default "[=>-]" format
 		mpb.WithFormat("╢▌▌░╟"),
 		// override default 120ms refresh rate
-		mpb.WithRefreshRate(100*time.Millisecond),
+		mpb.WithRefreshRate(180*time.Millisecond),
 	)
 
 	name := "Processed Images:"
@@ -153,16 +158,17 @@ func main() {
 	bar := p.AddBar(int64(len(files)),
 		// Prepending decorators
 		mpb.PrependDecorators(
-			// StaticName decorator with minWidth and no extra config
-			// If you need to change name while rendering, use DynamicName
-			decor.StaticName(name, len(name), 0),
-			// ETA decorator with minWidth and no extra config
-			decor.ETA(4, 0),
+			// display our name with one space on the right
+			decor.Name(name, decor.WC{W: len(name) + 1, C: decor.DidentRight}),
+			decor.OnComplete(
+				// ETA decorator with ewma age of 60, and width reservation of 4
+				decor.EwmaETA(decor.ET_STYLE_GO, 60, decor.WC{W: 4}), "done",
+			),
 		),
 		// Appending decorators
 		mpb.AppendDecorators(
 			// Percentage decorator with minWidth and no extra config
-			decor.Percentage(5, 0),
+			decor.Percentage(),
 		),
 	)
 
@@ -178,13 +184,13 @@ func main() {
 		fn := filepath.Join(*path, f.Name())
 		file, err := os.Open(fn)
 		if err != nil {
-			fmt.Printf("%s: %v\n", fn, err)
+			logger.Printf("%s: %v\n", fn, err)
 			bar.Increment()
 			continue
 		}
 		_, format, err := image.DecodeConfig(file)
 		if err != nil {
-			fmt.Printf("%s: %v\n", fn, err)
+			logger.Printf("%s: %v\n", fn, err)
 			file.Close()
 			bar.Increment()
 			continue
@@ -194,14 +200,14 @@ func main() {
 		if decodeFunc, ok := extensions[format]; ok {
 			file, err := os.Open(fn)
 			if err != nil {
-				fmt.Printf("%s: %v\n", fn, err)
+				logger.Printf("%s: %v\n", fn, err)
 				bar.Increment()
 				continue
 			}
 
 			img, err := decodeFunc(file)
 			if err != nil {
-				fmt.Printf("ignoring %s: %v\n", fn, err)
+				logger.Printf("ignoring %s: %v\n", fn, err)
 				bar.Increment()
 				continue
 			}
@@ -213,13 +219,13 @@ func main() {
 				match := matches[0]
 				fi := match.ID.(os.FileInfo)
 				if int(match.Score) <= *sensitivity {
-					fmt.Printf("%s matches: %s\n", fn, fi.Name())
+					logger.Printf("%s matches: %s\n", fn, fi.Name())
 
 					if !*dryRun {
 						_, err := os.Stat(dst)
 						if err != nil && os.IsNotExist(err) {
 							if err := os.Mkdir(dst, os.ModePerm); err != nil {
-								fmt.Println("Could not create destination directory: ", err)
+								logger.Println("Could not create destination directory: ", err)
 								os.Exit(1)
 							}
 						}
@@ -231,17 +237,17 @@ func main() {
 							store.Add(f, hash)
 							store.Delete(fi)
 							if err := os.Rename(filepath.Join(*path, fi.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))); err != nil {
-								fmt.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))
+								logger.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))
 							}
 							if err := CopyFile(filepath.Join(*path, f.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, f.Name()))); err != nil {
-								fmt.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, f.Name()))
+								logger.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, f.Name()))
 							}
 						} else {
 							if err := CopyFile(filepath.Join(*path, fi.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, fi.Name()))); err != nil {
-								fmt.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, fi.Name()))
+								logger.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, fi.Name()))
 							}
 							if err := os.Rename(filepath.Join(*path, f.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, f.Name()))); err != nil {
-								fmt.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, f.Name()))
+								logger.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, f.Name()))
 							}
 						}
 					} else {
@@ -252,10 +258,11 @@ func main() {
 				store.Add(f, hash)
 			}
 			if err := file.Close(); err != nil {
-				fmt.Println("could not close file: ", fn)
+				logger.Println("could not close file: ", fn)
 			}
 			bar.Increment()
 		}
 	}
 	p.Wait()
+	fmt.Print("Report:\n", &buf)
 }
