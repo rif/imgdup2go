@@ -22,12 +22,12 @@ f469b__GONE__image16.jpg
 f469b__KEPT__image19.jpg
 ```
 
-The initial hash pairs the files together, the KEPT files were copyed from the initial directory while the GONE files were moved.
+The initial hash pairs the files together, the KEPT files were copied from the initial directory while the GONE files were moved.
 
-After inspecting the pairs if you agree with what the tool found as duplicates you can just remove the duplicates folder, otherwhise move the specific GONE files back in the original directory removing the prefix.
+After inspecting the pairs, if you agree with what the tool found as duplicates you can just remove the duplicates folder; otherwise, move the specific GONE files back into the original directory, removing the prefix.
 To undo everything you can use the -undo flag.
 
-To find more loosely similat images you can increase the sensitivity, to make it even stricter you can go negative. Enjoy!
+To find more loosely similar images you can increase the sensitivity, to make it even stricter you can go negative. Enjoy!
 
 ## Install
 
