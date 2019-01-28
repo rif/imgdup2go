@@ -1,14 +1,16 @@
 # imgdup2go
-Another (small) command line visual image duplicate finder
+Another command line visual (perceptual) image duplicate finder
 
 ```
 Usage of ./imgdup2go:
+  -algo string
+    	algorithm for image hashing fmiq|avg|diff (default "avg")
   -dryrun
     	only print found matches
   -path string
     	the path to search the images (default ".")
   -sensitivity int
-    	the sensitivity treshold (the lower, the better the match (can be negative))
+    	the sensitivity treshold (the lower, the better the match (can be negative)) - fmiq algorithm only
   -undo
     	restore removed duplicates
 ```
@@ -27,7 +29,9 @@ The initial hash pairs the files together, the KEPT files were copied from the i
 After inspecting the pairs, if you agree with what the tool found as duplicates you can just remove the duplicates folder; otherwise, move the specific GONE files back into the original directory, removing the prefix.
 To undo everything you can use the -undo flag.
 
-To find more loosely similar images you can increase the sensitivity, to make it even stricter you can go negative. Enjoy!
+The algorithms can be switched using -algo flag, in my test I found [avg](http://www.hackerfactor.com/blog/?/archives/432-Looks-Like-It.html) (default) to provide the best results.
+
+For [fmqi](http://grail.cs.washington.edu/projects/query/mrquery.pdf) (Fast Multiresolution Image Querying) you can detect more loosely similar images by increasing the sensitivity, to make it even stricter you can go negative. Enjoy!
 
 ## Install
 
@@ -38,7 +42,7 @@ From source:
 go get -u -v https://github.com/rif/imgdup2go
 ```
 ## Credits
-The heavy lifting is done by the [duplo](https://github.com/rivo/duplo) library.
+The heavy lifting is done by [imgsim](https://github.com/Nr90/imgsim) and [duplo](https://github.com/rivo/duplo) libraries. You can find more info on the hashing algorithms at the libraries home page.
 
 A python version can be found [here](https://github.com/rif/imgdup)
 
