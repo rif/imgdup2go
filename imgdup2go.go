@@ -14,10 +14,11 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"sort"
 	"strings"
 	"time"
 
+	"github.com/Nr90/imgsim"
+	"github.com/rif/imgdup2go/hasher"
 	"github.com/rivo/duplo"
 	"github.com/vbauerster/mpb"
 	"github.com/vbauerster/mpb/decor"
@@ -28,6 +29,7 @@ var (
 	dst          = "duplicates"
 	keepPrefix   = "_KEPT_"
 	deletePrefix = "_GONE_"
+	algo         = flag.String("algo", "fmiq", "algorithm for image hashing fmiq|avf|diff")
 	sensitivity  = flag.Int("sensitivity", 0, "the sensitivity treshold (the lower, the better the match (can be negative))")
 	path         = flag.String("path", ".", "the path to search the images")
 	dryRun       = flag.Bool("dryrun", false, "only print found matches")
@@ -135,7 +137,14 @@ func main() {
 	}
 
 	// Create an empty store.
-	store := duplo.New()
+	var store hasher.Store
+	switch *algo {
+	case "fmiq":
+		store = hasher.NewDuploStore(*sensitivity)
+	default:
+		store = hasher.NewImgsimStore()
+	}
+
 	fmt.Printf("Found %d files\n", len(files))
 
 	p := mpb.New(
@@ -153,17 +162,16 @@ func main() {
 	bar := p.AddBar(int64(len(files)),
 		// Prepending decorators
 		mpb.PrependDecorators(
-			// StaticName decorator with minWidth and no extra config
-			// If you need to change name while rendering, use DynamicName
-			decor.StaticName(name, len(name), 0),
-			// ETA decorator with minWidth and no extra config
-			decor.ETA(4, 0),
+			// display our name with one space on the right
+			decor.Name(name, decor.WC{W: len(name) + 1, C: decor.DidentRight}),
+			// replace ETA decorator with "done" message, OnComplete event
+			decor.OnComplete(
+				// ETA decorator with ewma age of 60, and width reservation of 4
+				decor.EwmaETA(decor.ET_STYLE_GO, 60, decor.WC{W: 4}), "done",
+			),
 		),
 		// Appending decorators
-		mpb.AppendDecorators(
-			// Percentage decorator with minWidth and no extra config
-			decor.Percentage(5, 0),
-		),
+		mpb.AppendDecorators(decor.Percentage()),
 	)
 
 	for _, f := range files {
@@ -206,47 +214,54 @@ func main() {
 				continue
 			}
 			// Add image "img" to the store.
-			hash, _ := duplo.CreateHash(img)
-			matches := store.Query(hash)
-			if len(matches) > 0 {
-				sort.Sort(matches)
-				match := matches[0]
-				fi := match.ID.(os.FileInfo)
-				if int(match.Score) <= *sensitivity {
-					fmt.Printf("%s matches: %s\n", fn, fi.Name())
+			var hash interface{}
 
-					if !*dryRun {
-						_, err := os.Stat(dst)
-						if err != nil && os.IsNotExist(err) {
-							if err := os.Mkdir(dst, os.ModePerm); err != nil {
-								fmt.Println("Could not create destination directory: ", err)
-								os.Exit(1)
-							}
+			switch *algo {
+			case "fmiq":
+				hash, _ = duplo.CreateHash(img)
+			case "avg":
+				hash = imgsim.AverageHash(img)
+			case "diff":
+				hash = imgsim.DifferenceHash(img)
+			default:
+				hash = imgsim.DifferenceHash(img)
+			}
+			match := store.Query(hash)
+			if match != nil {
+				fi := match.(os.FileInfo)
+				fmt.Printf("%s matches: %s\n", fn, fi.Name())
+
+				if !*dryRun {
+					_, err := os.Stat(dst)
+					if err != nil && os.IsNotExist(err) {
+						if err := os.Mkdir(dst, os.ModePerm); err != nil {
+							fmt.Println("Could not create destination directory: ", err)
+							os.Exit(1)
 						}
+					}
 
-						hasher := md5.New()
-						hasher.Write([]byte(f.Name() + fi.Name()))
-						sum := hex.EncodeToString(hasher.Sum(nil))[:5]
-						if f.Size() >= fi.Size() {
-							store.Add(f, hash)
-							store.Delete(fi)
-							if err := os.Rename(filepath.Join(*path, fi.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))); err != nil {
-								fmt.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))
-							}
-							if err := CopyFile(filepath.Join(*path, f.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, f.Name()))); err != nil {
-								fmt.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, f.Name()))
-							}
-						} else {
-							if err := CopyFile(filepath.Join(*path, fi.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, fi.Name()))); err != nil {
-								fmt.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, fi.Name()))
-							}
-							if err := os.Rename(filepath.Join(*path, f.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, f.Name()))); err != nil {
-								fmt.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, f.Name()))
-							}
+					hasher := md5.New()
+					hasher.Write([]byte(f.Name() + fi.Name()))
+					sum := hex.EncodeToString(hasher.Sum(nil))[:5]
+					if f.Size() >= fi.Size() {
+						store.Add(f, hash)
+						store.Delete(fi, hash)
+						if err := os.Rename(filepath.Join(*path, fi.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))); err != nil {
+							fmt.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))
+						}
+						if err := CopyFile(filepath.Join(*path, f.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, f.Name()))); err != nil {
+							fmt.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, f.Name()))
 						}
 					} else {
-						store.Add(f, hash)
+						if err := CopyFile(filepath.Join(*path, fi.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, fi.Name()))); err != nil {
+							fmt.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, fi.Name()))
+						}
+						if err := os.Rename(filepath.Join(*path, f.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, f.Name()))); err != nil {
+							fmt.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, f.Name()))
+						}
 					}
+				} else {
+					store.Add(f, hash)
 				}
 			} else {
 				store.Add(f, hash)
