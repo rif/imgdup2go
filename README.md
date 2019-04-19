@@ -39,7 +39,7 @@ You can find binaries [here](https://github.com/rif/imgdup2go/releases).
 
 From source:
 ```
-go get -u -v https://github.com/rif/imgdup2go
+go get -u -v github.com/rif/imgdup2go
 ```
 ## Credits
 The heavy lifting is done by [imgsim](https://github.com/Nr90/imgsim) and [duplo](https://github.com/rivo/duplo) libraries. You can find more info on the hashing algorithms at the libraries home page.
