@@ -37,6 +37,11 @@ var (
 	undo         = flag.Bool("undo", false, "restore removed duplicates")
 )
 
+type imgInfo struct {
+	fileInfo os.FileInfo
+	res int
+}
+
 // CopyFile copies a file from src to dst. If src and dst files exist, and are
 // the same, then return success. Otherise, attempt to create a hard link
 // between the two files. If that fail, copy the file contents from src to dst.
@@ -220,6 +225,8 @@ func main() {
 				bar.Increment()
 				continue
 			}
+			b:=img.Bounds()
+			res:=b.Dx()*b.Dy()
 			// Add image "img" to the store.
 			var hash interface{}
 			switch *algo {
@@ -234,7 +241,8 @@ func main() {
 			}
 			match := store.Query(hash)
 			if match != nil {
-				fi := match.(os.FileInfo)
+				ii := match.(*imgInfo)
+				fi:=ii.fileInfo
 				logger.Printf("%s matches: %s\n", fn, fi.Name())
 
 				if !*dryRun {
@@ -249,8 +257,8 @@ func main() {
 					hasher := md5.New()
 					hasher.Write([]byte(f.Name() + fi.Name()))
 					sum := hex.EncodeToString(hasher.Sum(nil))[:5]
-					if f.Size() >= fi.Size() {
-						store.Add(f, hash)
+					if res > ii.res {
+						store.Add(&imgInfo{fileInfo:f, res:res}, hash)
 						store.Delete(fi, hash)
 						if err := os.Rename(filepath.Join(*path, fi.Name()), filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))); err != nil {
 							logger.Println("error moving file: " + fmt.Sprintf("%s_%s_%s", sum, deletePrefix, fi.Name()))
@@ -267,11 +275,11 @@ func main() {
 						}
 					}
 				} else {
-					store.Add(f, hash)
+					store.Add(&imgInfo{fileInfo:f, res:res}, hash)
 				}
 
 			} else {
-				store.Add(f, hash)
+				store.Add(&imgInfo{fileInfo:f, res:res}, hash)
 			}
 			if err := file.Close(); err != nil {
 				logger.Println("could not close file: ", fn)
