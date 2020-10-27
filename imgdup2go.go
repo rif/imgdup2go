@@ -217,22 +217,23 @@ func handleFile(store hasher.Store, currentFile string, logger *log.Logger, dst 
 				if err != nil {
 					return err
 				}
+				baseMatchedFile := filepath.Base(matchedFile)
+				baseCurrentFile := filepath.Base(currentFile)
 				if res > matchedImgInfo.res {
 					store.Add(&imgInfo{fileInfo: currentFile, res: res}, hash)
 					store.Delete(matchedFile, hash)
-					if err := os.Rename(matchedFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, matchedFile))); err != nil {
-						return errors.WithMessagef(err, "error moving file: %s_%s_%s", sum, deletePrefix, matchedFile)
+					if err := os.Rename(matchedFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, baseMatchedFile))); err != nil {
+						return errors.WithMessagef(err, "error moving file: %s_%s_%s", sum, deletePrefix, baseMatchedFile)
 					}
-					if err := CopyFile(currentFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, currentFile))); err != nil {
-						return errors.WithMessagef(err, "error copying file: %s_%s_%s", sum, keepPrefix, matchedFile)
+					if err := CopyFile(currentFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, baseCurrentFile))); err != nil {
+						return errors.WithMessagef(err, "error copying file: %s_%s_%s", sum, keepPrefix, baseCurrentFile)
 					}
 				} else {
-					if err := CopyFile(matchedFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, matchedFile))); err != nil {
-						logger.Println("error copying file: " + fmt.Sprintf("%s_%s_%s", sum, keepPrefix, matchedFile))
-						return errors.WithMessagef(err, "error copying file: %s_%s_%s", sum, keepPrefix, matchedFile)
+					if err := CopyFile(matchedFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, keepPrefix, baseMatchedFile))); err != nil {
+						return errors.WithMessagef(err, "error copying file: %s_%s_%s", sum, keepPrefix, baseMatchedFile)
 					}
-					if err := os.Rename(currentFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, currentFile))); err != nil {
-						return errors.WithMessagef(err, "error moving file: %s_%s_%s", sum, deletePrefix, matchedFile)
+					if err := os.Rename(currentFile, filepath.Join(dst, fmt.Sprintf("%s_%s_%s", sum, deletePrefix, baseCurrentFile))); err != nil {
+						return errors.WithMessagef(err, "error moving file: %s_%s_%s", sum, deletePrefix, baseCurrentFile)
 					}
 				}
 			} else {
