@@ -113,8 +113,8 @@ func main() {
 		handleUndo(logger, dst)
 		return
 	}
-	p, bar := createProgressBar()
-	files := findFilesToCompare(logger, bar)
+	files := findFilesToCompare(logger)
+	p, bar := createProgressBar(int64(len(files)))
 
 	store := createEmptyStore()
 
@@ -128,7 +128,7 @@ func main() {
 		}
 	}
 
-	for filename := range files {
+	for _, filename := range files {
 		err := handleFile(store, filename, logger, dst)
 		if err != nil {
 			logger.Print(err)
@@ -139,33 +139,28 @@ func main() {
 	fmt.Print("Report:\n", &buf)
 }
 
-func findFilesToCompare(logger *log.Logger, bar *mpb.Bar) <-chan string {
-	files := make(chan string, 1000)
-	go func() {
-		total := int64(0)
-		defer close(files)
-		err := filepath.Walk(*path, func(currentPath string, info os.FileInfo, err error) error {
-			if err != nil {
-				return err
-			}
-			// logger.Printf("file %s", currentPath)
-			if !info.IsDir() {
-				total++
-				bar.SetTotal(total, false)
-				logger.Printf("Found file: %v", info.Name())
-				files <- currentPath
-			}
-			if info.IsDir() && !*recurse && currentPath != *path {
-				return filepath.SkipDir
-			}
-			return nil
-		})
+func findFilesToCompare(logger *log.Logger) []string {
+	var files []string
+	total := int64(0)
+	err := filepath.Walk(*path, func(currentPath string, info os.FileInfo, err error) error {
 		if err != nil {
-			logger.Printf("Failed to read files: %v", err)
+			return err
 		}
-		bar.SetTotal(total, true)
-		logger.Printf("Found %d files\n", total)
-	}()
+		// logger.Printf("file %s", currentPath)
+		if !info.IsDir() {
+			total++
+			logger.Printf("Found file: %v", info.Name())
+			files = append(files, currentPath)
+		}
+		if info.IsDir() && !*recurse && currentPath != *path {
+			return filepath.SkipDir
+		}
+		return nil
+	})
+	if err != nil {
+		logger.Printf("Failed to read files: %v", err)
+	}
+	logger.Printf("Found %d files\n", total)
 
 	return files
 }
@@ -296,7 +291,7 @@ func getImageFormat(fn string) (format string, err error) {
 	return format, nil
 }
 
-func createProgressBar() (*mpb.Progress, *mpb.Bar) {
+func createProgressBar(total int64) (*mpb.Progress, *mpb.Bar) {
 	p := mpb.New(
 		// override default (80) width
 		mpb.WithWidth(64),
@@ -307,7 +302,7 @@ func createProgressBar() (*mpb.Progress, *mpb.Bar) {
 	name := "Processed Images:"
 	// Add a bar
 	// You're not limited to just a single bar, add as many as you need
-	bar := p.AddBar(int64(1),
+	bar := p.AddBar(total,
 		// override default "[=>-]" format
 		mpb.BarStyle("╢▌▌░╟"),
 		// Prepending decorators
@@ -324,6 +319,8 @@ func createProgressBar() (*mpb.Progress, *mpb.Bar) {
 		mpb.AppendDecorators(
 			// Percentage decorator with minWidth and no extra config
 			decor.Percentage(),
+			decor.Name(" - "),
+			decor.NewAverageETA(decor.ET_STYLE_GO, time.Now(), decor.FixedIntervalTimeNormalizer(5)),
 		),
 	)
 	return p, bar
